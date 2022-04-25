@@ -11,6 +11,8 @@
 constexpr auto PI = 3.141592653589793238462643383279502884197169;
 #define DEG2RAD(deg) ((deg) * PI / 180)
 #define GET_LOC(i) ((i) * 4 + 3)
+#define DISTRIBUTED_TEX_UNIT 3
+#define UNDISTRIBUTED_TEX_UNIT 0
 
 using namespace cy;
 
@@ -38,6 +40,7 @@ cy::GLRenderTexture2D renderBuffer;
 cyGLTexture2D diffuse_tex;
 cyGLTexture2D spec_tex;
 cyGLTexture2D tree_tex;
+cyGLTexture2D undistributed;
 
 Matrix4f object_mvp;
 Matrix4f object_mv;
@@ -51,25 +54,43 @@ Matrix4f plane_mvp;
 int textureWidth;
 int textureHeight;
 
+enum class Approach {
+	DISTRIBUTED,	
+	STOCHASTIC,
+	HASHED,
+	NORMAL
+};
+
+Approach approach = Approach::DISTRIBUTED;
+
 void myDisplay() {
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 
+	//both approaches apply to the same program
+	if (approach == Approach::NORMAL || approach == Approach::DISTRIBUTED) {
+		//draw the plane
+		plane_prog.Bind();
+		program = plane_prog.GetID();
 
-	//draw the plane
-	plane_prog.Bind();
-	program = plane_prog.GetID();
-	//tree_tex.Bind(3);
-	plane_prog["tree"] = 3;
+		if (approach == Approach::NORMAL) {
+			undistributed.Bind(UNDISTRIBUTED_TEX_UNIT);
+			plane_prog["tree"] = UNDISTRIBUTED_TEX_UNIT;
+		}
+		if (approach == Approach::DISTRIBUTED) {
+			tree_tex.Bind(DISTRIBUTED_TEX_UNIT);
+			plane_prog["tree"] = DISTRIBUTED_TEX_UNIT;
+		}
 
+		glBindVertexArray(plane_vao);
+		glBindBuffer(GL_ARRAY_BUFFER, plane_buffer);
 
-	glBindVertexArray(plane_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, plane_buffer);
-
-	glDrawArrays(GL_TRIANGLES,
-		0,
-		6);
+		glDrawArrays(GL_TRIANGLES,
+			0,
+			6);
+	}
+	
 
 	//draw enviro
 	glDepthMask(GL_FALSE);
@@ -98,16 +119,23 @@ void myDisplay() {
 void myKeyboard(unsigned char key, int x, int y) {
 	if (key == 27)
 		exit(0);
-	else if (key == GLUT_KEY_F6) {
-		std::cout << "recompiling shaders" << std::endl;
-
-		//compile the shaders
-		object_prog.BuildFiles("shader.vert",
-			"shader.frag");
-		object_prog.Bind();
-		program = object_prog.GetID();
+	else if (key == 49) {
+		std::cout << "1 key pressed: using traditional Alpha Testing" << std::endl;
+		approach = Approach::NORMAL;
 	}
-
+	else if (key == 50) {
+		std::cout << "2 key pressed: using Alpha Distribution" << std::endl;
+		approach = Approach::DISTRIBUTED;
+	}
+	else if (key == 51) {
+		std::cout << "3 key pressed: using Stochastic Alpha Testing" << std::endl;
+		approach = Approach::STOCHASTIC;
+	}
+	else if (key == 52) {
+		std::cout << "4 key pressed: using Hashed Alpha Testing" << std::endl;
+		approach = Approach::HASHED;
+	}
+	glutPostRedisplay();
 }
 
 void myIdle() {
@@ -294,8 +322,8 @@ std::pair<int, int> sendTextureToFragmentShader(cyGLTexture2D* tex, std::string 
 
 	tex->SetImage(image.data(), 4, width, height);
 	tex->BuildMipmaps();
-	tex->Bind(texUnit);
-	plane_prog[varName.data()] = texUnit;
+	//tex->Bind(texUnit);
+	//plane_prog[varName.data()] = texUnit;
 	return { width, height };
 }
 
@@ -473,6 +501,7 @@ void AlphaDistribute() {
 	int height = 0;
 	int width = 0;
 	int textureId = tree_tex.GetID();
+	tree_tex.Bind(DISTRIBUTED_TEX_UNIT);
 	setWidth(mipMapLevel, &width);
 	setHeight(mipMapLevel, &height);
 	for (mipMapLevel = 0; width >= 1 && height >= 1; mipMapLevel++,
@@ -648,12 +677,11 @@ int main(int argc, char** argv) {
 
 
 	createPlane();
-	std::pair<int, int> dimensions = sendTextureToFragmentShader(&tree_tex, "LushPine.png", "tree", 3);
-	/*cy::AlphaDistribution::FixTextureAlpha(
-		cy::AlphaDistribution::METHOD_PYRAMID,
-		tree_tex.GetID());*/
-
+	std::pair<int, int> dimensions = sendTextureToFragmentShader(&tree_tex, "LushPine.png", "tree", DISTRIBUTED_TEX_UNIT);
 	AlphaDistribute();
+
+	sendTextureToFragmentShader(&undistributed, "LushPine.png", "tree", UNDISTRIBUTED_TEX_UNIT);
+
 
 	textureWidth = dimensions.first;
 	textureHeight = dimensions.second;
