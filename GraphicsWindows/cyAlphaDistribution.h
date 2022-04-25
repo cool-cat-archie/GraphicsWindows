@@ -49,7 +49,7 @@
 // 
 //-------------------------------------------------------------------------------
 
-#ifndef _CY_ALPHA_DISTRIBUTION_H_INCLUDED_
+//#ifndef _CY_ALPHA_DISTRIBUTION_H_INCLUDED_
 #define _CY_ALPHA_DISTRIBUTION_H_INCLUDED_
 
 //-------------------------------------------------------------------------------
@@ -537,4 +537,4 @@ typedef cy::AlphaDistribution cyAlphaDistribution;		//!< An implementation of al
 
 //-------------------------------------------------------------------------------
 
-#endif
+//#endif

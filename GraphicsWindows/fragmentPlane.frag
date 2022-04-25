@@ -1,4 +1,5 @@
-#version 330 core
+#version 420 core
+
 layout(location = 0) out vec4 color;
 uniform sampler2D tree;
 in vec4 v;
