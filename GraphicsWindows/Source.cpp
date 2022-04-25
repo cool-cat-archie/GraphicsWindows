@@ -4,6 +4,7 @@
 #include "cyTriMesh.h"
 #include "Source.h"
 #include "cyMatrix.h"
+#include "cyAlphaDistribution.h"
 #include "cyGl.h"
 #include "lodepng.h"
 
@@ -51,46 +52,13 @@ int textureHeight;
 
 void myDisplay() {
     
-    renderBuffer.Bind();
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    //draw object
-    object_prog.Bind();
-    program = object_prog.GetID();
-    envmap.Bind(0);
-    
-    object_prog["target"] = 1; //means rendering texture
-
-    object_prog["env"] = 0;
-    glBindVertexArray(object_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, object_buffer);
-
-    glEnable(GL_DEPTH_TEST);
-
-    glDrawArrays(GL_TRIANGLES,
-        0,
-        totalVerts);
-
-
-    renderBuffer.Unbind();
-    renderBuffer.BuildTextureMipmaps();
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glEnable(GL_DEPTH_TEST);
-
-    object_prog["target"] = 0;
-
-    /*glDrawArrays(GL_TRIANGLES,
-        0,
-        totalVerts);*/
 
 
-    //also draw the plane
+    //draw the plane
     plane_prog.Bind();
     program = plane_prog.GetID();
-    renderBuffer.BindTexture(2);
-    plane_prog["rendered"] = 2;
-
     //tree_tex.Bind(3);
     plane_prog["tree"] = 3;
 
@@ -117,43 +85,7 @@ void myDisplay() {
     );
     glDepthMask(GL_TRUE);
 
-    /*
-    renderBuffer.Bind();
-
-    glClearColor(.3, .3, .3, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    object_prog.Bind();
-    program = object_prog.GetID();
-    envmap.Bind(0);
-    object_prog["env"] = 0;
-    glBindVertexArray(object_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, object_buffer);
-
-
-    glEnable(GL_DEPTH_TEST);
-
-    glDrawArrays(GL_TRIANGLES,
-        0,
-        totalVerts);
-
-    renderBuffer.Unbind();
-    renderBuffer.BuildTextureMipmaps();
-
-
-    plane_prog.Bind();
-    program = plane_prog.GetID();
-
-    glBindVertexArray(plane_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, plane_buffer);
-    renderBuffer.BindTexture(2);
-
-    plane_prog["rendered"] = 2;
-    glClearColor(0, 0, 0, 1);
-
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glDrawArrays(GL_TRIANGLES,
-        0,
-        6);*/
+   
 
     glutSwapBuffers();
 }
@@ -178,7 +110,6 @@ void myKeyboard(unsigned char key, int x, int y) {
 }
 
 void myIdle() {
-    //glutPostRedisplay();
 }
 
 int mouseButton;
@@ -362,8 +293,8 @@ std::pair<int,int> sendTextureToFragmentShader(cyGLTexture2D* tex, std::string f
 
     tex->SetImage(image.data(), 4, width, height);
     tex->BuildMipmaps();
-    //tex->Bind(texUnit);
-    //object_prog[varName.data()] = texUnit;
+    tex->Bind(texUnit);
+    plane_prog[varName.data()] = texUnit;
     return { width, height };
 }
 
@@ -418,8 +349,6 @@ void createPlane() {
     plane_mvp = projMatrix * view;
     plane_prog["mvp"] = plane_mvp;
 
-    //will be bound to tecture unit 0
-    plane_prog["tex"] = 0;
 
 
 }
@@ -575,7 +504,7 @@ int main(int argc, char** argv) {
     object_prog.BuildFiles("shader.vert",
         "shader.frag");
     plane_prog.BuildFiles("vertexPlane.vert",
-        "fragmentPlane.frag");
+        /*"fragmentPlane.frag"*/ /*"stochastic.frag"*/ "hashed.frag");
     object_prog.Bind();
     program = object_prog.GetID();
 
@@ -632,46 +561,21 @@ int main(int argc, char** argv) {
         txc, 3, GL_FLOAT,
         GL_FALSE, sizeof(Vec3f) * 3, (GLvoid*)(2*sizeof(Vec3f)));
 
-    /*int matIndex = tm.GetMaterialIndex(0);
-    cy::TriMesh::Mtl mtl = tm.M(matIndex);*/
-
-    //std::string filename = mtl.map_Ka.data; 
-    std::pair<int,int> dimensions = sendTextureToFragmentShader(&diffuse_tex, "brick.png", "tex", 0);
-    textureWidth = dimensions.first;
-    textureHeight = dimensions.second;
-
-    /*filename = mtl.map_Ks;
-    sendTextureToFragmentShader(&spec_tex, filename, "specTex", 1);*/
-
-
-    //texture_inKa = Vec3f(mtl.Ka);
-    //texture_inKd = Vec3f(mtl.Kd);
-    //texture_inKs = Vec3f(mtl.Ks);
-    //texture_Ns = mtl.Ns;
-
-
-    //texture_prog["inKa"] = texture_inKa;
-    //texture_prog["inKd"] = texture_inKd;
-    //texture_prog["inKs"] = texture_inKs;
     object_prog["Ns"] = 20;
     object_prog["omega"] = omega;
 
-    
-    renderBuffer.Initialize(
-        true, // create depth buffer
-        4, // RGBA
-        textureWidth, // width
-        textureHeight // height
-    );
-    renderBuffer.SetTextureFilteringMode(GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR);
-    renderBuffer.SetTextureMaxAnisotropy();
 
-    dimensions = sendTextureToFragmentShader(&tree_tex, "LushPine.png", "tex", 0);
-    tree_tex.Bind(3);
+    createPlane();
+    std::pair<int, int> dimensions = sendTextureToFragmentShader(&tree_tex, "LushPine.png", "tree", 3);
+
+
+   /* cy::AlphaDistribution::FixTextureAlpha(
+        cy::AlphaDistribution::METHOD_PYRAMID,
+        3);*/
+
     textureWidth = dimensions.first;
     textureHeight = dimensions.second;
 
-    createPlane();
     glutMainLoop();
 
     return 0;
