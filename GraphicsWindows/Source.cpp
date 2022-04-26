@@ -4,7 +4,6 @@
 #include "cyTriMesh.h"
 #include "Source.h"
 #include "cyMatrix.h"
-#include "cyAlphaDistribution.h"
 #include "cyGl.h"
 #include "lodepng.h"
 
@@ -30,6 +29,8 @@ TriMesh tm;
 GLuint program;
 GLSLProgram object_prog;
 GLSLProgram plane_prog;
+GLSLProgram stochastic_prog;
+GLSLProgram hashed_prog;
 GLSLProgram enviro_prog;
 
 int totalVerts;
@@ -82,6 +83,36 @@ void myDisplay() {
 			tree_tex.Bind(DISTRIBUTED_TEX_UNIT);
 			plane_prog["tree"] = DISTRIBUTED_TEX_UNIT;
 		}
+
+		glBindVertexArray(plane_vao);
+		glBindBuffer(GL_ARRAY_BUFFER, plane_buffer);
+
+		glDrawArrays(GL_TRIANGLES,
+			0,
+			6);
+	}
+	else if (approach == Approach::STOCHASTIC) {
+		stochastic_prog.Bind();
+		program = stochastic_prog.GetID();
+
+		//use the texture that wasn't affected by alpha distribution
+		undistributed.Bind(UNDISTRIBUTED_TEX_UNIT);
+		stochastic_prog["tree"] = UNDISTRIBUTED_TEX_UNIT;
+
+		glBindVertexArray(plane_vao);
+		glBindBuffer(GL_ARRAY_BUFFER, plane_buffer);
+
+		glDrawArrays(GL_TRIANGLES,
+			0,
+			6);
+	}
+	else if (approach == Approach::HASHED) {
+		hashed_prog.Bind();
+		program = hashed_prog.GetID();
+
+		//use the texture that wasn't affected by alpha distribution
+		undistributed.Bind(UNDISTRIBUTED_TEX_UNIT);
+		hashed_prog["tree"] = UNDISTRIBUTED_TEX_UNIT;
 
 		glBindVertexArray(plane_vao);
 		glBindBuffer(GL_ARRAY_BUFFER, plane_buffer);
@@ -185,6 +216,8 @@ void myMouseMotion(int x, int y) {
 					1000.0f);
 			plane_mvp = projMatrix * view;//* rotMatrix;
 			plane_prog["mvp"] = plane_mvp;
+			stochastic_prog["mvp"] = plane_mvp;
+			hashed_prog["mvp"] = plane_mvp;
 			oldVertPlane = y;
 
 		}
@@ -208,12 +241,18 @@ void myMouseMotion(int x, int y) {
 					1000.0f);
 			plane_mvp = projMatrix * view * rotMatrix;
 			plane_prog["mvp"] = plane_mvp;
+			stochastic_prog["mvp"] = plane_mvp;
+			hashed_prog["mvp"] = plane_mvp;
 			plane_prog["mv"] = view * rotMatrix;
+			stochastic_prog["mv"] = view * rotMatrix;
+			hashed_prog["mv"] = view * rotMatrix;
 
 			Matrix3f invTrans = Matrix3f(view * rotMatrix);
 			invTrans.Invert();
 			invTrans.Transpose();
 			plane_prog["inverseTranspose"] = invTrans;
+			stochastic_prog["inverseTranspose"] = invTrans;
+			hashed_prog["inverseTranspose"] = invTrans;
 
 		}
 		else if (mod != GLUT_ACTIVE_ALT && mod != GLUT_ACTIVE_CTRL) {
@@ -264,6 +303,8 @@ void myMouseMotion(int x, int y) {
 					1000.0f);
 			plane_mvp = projMatrix * view * rotMatrix;
 			plane_prog["mvp"] = plane_mvp;
+			stochastic_prog["mvp"] = plane_mvp;
+			hashed_prog["mvp"] = plane_mvp;
 			oldVertPlane = y;
 
 		}
@@ -365,6 +406,26 @@ void createPlane() {
 		pos, 3, GL_FLOAT,
 		GL_FALSE, sizeof(Vec3f), (GLvoid*)0);
 
+	program = stochastic_prog.GetID();
+	pos = glGetAttribLocation(
+		program, "pos");
+	glEnableVertexAttribArray(pos);
+	glVertexAttribPointer(
+		pos, 3, GL_FLOAT,
+		GL_FALSE, sizeof(Vec3f), (GLvoid*)0);
+
+	program = hashed_prog.GetID();
+	pos = glGetAttribLocation(
+		program, "pos");
+	glEnableVertexAttribArray(pos);
+	glVertexAttribPointer(
+		pos, 3, GL_FLOAT,
+		GL_FALSE, sizeof(Vec3f), (GLvoid*)0);
+
+	program = plane_prog.GetID();
+
+
+
 	cy::Matrix4f view = cy::Matrix4f::View(Vec3f(0.0f, 0.0f, 3.0f),
 		Vec3f(0.0f, 0.0f, 0.0f),
 		Vec3f(0.0f, 1.0f, 0.0f));
@@ -377,6 +438,8 @@ void createPlane() {
 
 	plane_mvp = projMatrix * view;
 	plane_prog["mvp"] = plane_mvp;
+	stochastic_prog["mvp"] = plane_mvp;
+	hashed_prog["mvp"] = plane_mvp;
 
 
 
@@ -386,13 +449,13 @@ void initEnviroMap() {
 	enviro_prog.BuildFiles("enviroVert.vert", "enviroFrag.frag");
 
 	envmap.Initialize();
-	std::string files[6] = { "cubemap_posx.png",
+	/*std::string files[6] = { "cubemap_posx.png",
 	"cubemap_negx.png",  "cubemap_posy.png" , "cubemap_negy.png",
-	"cubemap_posz.png", "cubemap_negz.png" };
+	"cubemap_posz.png", "cubemap_negz.png" };*/
 
-	/* std::string files[6] = { "posx.png",
+	 std::string files[6] = { "posx.png",
 	 "negx.png",  "posy.png" , "negy.png",
-	 "posz.png", "negz.png" };*/
+	 "posz.png", "negz.png" };
 
 	for (int i = 0; i < 6; ++i) {
 		// load image from file
@@ -615,7 +678,14 @@ int main(int argc, char** argv) {
 	object_prog.BuildFiles("shader.vert",
 		"shader.frag");
 	plane_prog.BuildFiles("vertexPlane.vert",
-		"fragmentPlane.frag" /*"stochastic.frag"*/ /*"hashed.frag"*/);
+		"fragmentPlane.frag");
+	stochastic_prog.BuildFiles("vertexPlane.vert",
+		"stochastic.frag");
+	hashed_prog.BuildFiles("vertexPlane.vert",
+		"hashed.frag");
+
+
+
 	object_prog.Bind();
 	program = object_prog.GetID();
 
@@ -643,9 +713,13 @@ int main(int argc, char** argv) {
 
 	//set mv for plane as well
 	plane_prog["mv"] = view;
+	stochastic_prog["mv"] = view;
+	hashed_prog["mv"] = view;
 
 	object_prog["rot"] = object_mvp.Identity();
 	plane_prog["rot"] = object_mvp.Identity();
+	stochastic_prog["rot"] = object_mvp.Identity();
+	hashed_prog["rot"] = object_mvp.Identity();
 
 
 	object_inverseTranspose = Matrix3f(view);
